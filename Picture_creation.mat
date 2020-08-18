@@ -1,0 +1,342 @@
+
+
+clear all; close all ; clc ;
+
+image_fixe = 0 ;
+temps_video_mini = 6 ; % minimum time desired for the video
+
+
+%% Parameter
+
+new_folder = 0;                       % 1 = create a new folder by default ; 0 = find the folder name (see below)  
+name_folder = 'Mire_NB_Ve_0.09m_s';   % folder where pictures are saved. Else, a new file will be created by default
+
+
+nomImage = 'Mire_NB.png' ;  % reference picture
+
+
+Taille_IMGA = [684 608] ; % DLP pixel size 
+
+Type_Image =   'RGB' ;  % choose monochrome of RGB mode ('RGB' or 'gray') 
+
+Vdef = 3;  % scrolling velocity in pixel/image 
+
+
+if strcmp(Type_Image,'RGB')
+    nn = 3;
+elseif strcmp(Type_Image,'gray')
+    nn = 1;
+end
+
+
+N_bit_per_pattern = 8;      % bit per pattern (8 max if RGB, 24 max if monochrome)
+N_pattern_per_frame = 24 / (N_bit_per_pattern*nn);
+
+
+%% Create a new folder  
+
+
+if new_folder == 1
+
+    formatOut = 'dd-mm-yyyy-HH-MM';  % name folder
+    folderdatestr = datestr(now,formatOut);
+    folder_name = ['picture' folderdatestr ]; % fpr for Frames per Revolution
+
+    if exist(folder_name, 'dir')
+        warning(' REWRITTING DATA')
+    else
+        mkdir(folder_name)
+    end
+
+else  % choose a default folder
+    
+    folder_name = name_folder  ;
+
+    if exist(folder_name, 'dir')
+            warning(' REWRITTING DATA')
+    else
+            mkdir(folder_name)
+    end
+    
+end
+
+
+    
+%% Open and re-size the reference picture 
+
+I2=imread(nomImage) ;
+IMGA = imresize(I2, Taille_IMGA,'nearest');  % re-size the reference picture
+rgbImage_Base = IMGA ;
+
+
+%% Loop 
+
+disp('Creating pictures...')
+
+Vdef = round(Vdef);
+
+testcolor = 0;  % stockage variable 
+LCM = lcm(Taille_IMGA(2),round(Vdef)); % smaller commun divisor 
+NumImage = LCM/round(Vdef) ;   % number of picture to generate (if Vdef=1, NumImage= TailleImage(2))
+
+% minimum video duration in s:
+NumImageReel = floor(NumImage/N_pattern_per_frame);
+while NumImageReel < temps_video_mini*60
+    NumImage = NumImage + LCM/round(Vdef) ;
+    NumImageReel = floor(NumImage/N_pattern_per_frame);
+end
+
+
+test1 = 0;
+while test1 == 0  % Ask confirmation of the creation of the picture before generation
+    disp([num2str(NumImage), ' pictures will be generated. '])
+    x = input('Is it ok ? (y/n) ','s');
+
+    if strcmp(x,'n')
+       return 
+    elseif strcmp(x,'y')
+        test1 = 1;
+    else
+
+    end
+end
+    
+if NumImage > 9999
+   disp('More than 9999 pictures to generate. Modify code to save figure name.')
+    return
+end
+
+
+%%%% New file to store un-combined picture
+    folder_name_2 = [name_folder, '/images_for_patterns' ]; 
+
+    if exist(folder_name_2, 'dir')
+        warning(' REWRITTING DATA')
+    else
+        mkdir(folder_name_2)
+    end
+%%%%
+
+    % Creation of a pattern which will be repeat in 96/Bit Depth
+   
+    rgbImage_Base_2 = rgbImage_Base ; 
+    % Creation of the picture 
+    ii = 1;
+    for i = 1:Vdef:(NumImage*Vdef) 
+
+        
+        disp(['Pattern ', int2str(ii),'/',int2str(NumImage)])
+      
+        rgbImage = rgbImage_Base_2;
+        
+        if image_fixe == 1
+            rgbImage = rgbImage_Base_2;
+        else
+            
+            if i > 1  % spatial displacement 
+                I = round(mod(i,Taille_IMGA(2)));
+                if I == 0
+                   I =  Taille_IMGA(2);
+                end
+                rgbImage(:,1:end-I+1,:) = rgbImage_Base_2(:,I:end,:);
+                rgbImage(:,end-I+2:end,:) = rgbImage_Base_2(:,1:I-1,:);
+
+            end
+        end
+        % save et convert the color        
+        if ii < 1000
+            if ii < 100
+                if ii < 10
+                    numImage = ['000',int2str(ii)];
+                else
+                    numImage = ['00',int2str(ii)];
+                end
+            else
+                numImage = ['0',int2str(ii)];
+            end
+        else
+            numImage = int2str(ii);
+        end
+        if strcmp(Type_Image,'RGB')
+            imwrite(rgbImage,[folder_name_2,'/', numImage,'Pattern.bmp']) 
+         
+        elseif strcmp(Type_Image,'gray') 
+            rgbImage = rgb2gray(rgbImage) ;
+            imwrite(rgbImage,[folder_name_2,'/', numImage,'Pattern.bmp'])
+        
+        else
+            if testcolor == 0
+                disp('Choose a correct Type_Color input. RGB taken by default')
+                testcolor = 1;
+            end
+
+            imwrite(rgbImage,[folder_name_2,'/', numImage,'Pattern.bmp']) 
+            
+        end
+        
+        ii = ii+1;
+        
+    end
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+%% Compression of pattern to generate the final image
+
+
+disp('Compression of pattern in Npattern/frame...')
+
+imagefiles = dir([folder_name_2,'/','*.bmp']);
+
+
+    NN = floor(NumImage/N_pattern_per_frame);
+    for i = 1:floor(NumImage/N_pattern_per_frame)
+    
+        disp(['Frame ', int2str(i),'/',int2str(floor(NumImage/N_pattern_per_frame))])
+
+        
+        if strcmp(Type_Image,'RGB')
+            
+            IMGA_R = [ ] ;
+            IMGA_G = [ ] ;
+            IMGA_B = [ ] ;
+            
+            % selection des N_pattern
+            for j = 1:N_pattern_per_frame
+                
+                ii = j+(i-1)*N_pattern_per_frame ;
+                nomImage = imagefiles(ii).name;
+                Im = imread([folder_name_2,'/',nomImage]); % read the next image
+
+                Pat_R = Im(:,:,1) ; 
+                Pat_G = Im(:,:,2) ; 
+                Pat_B = Im(:,:,3) ; 
+        
+                % transformation en decimal
+                Pat_R_char = dec2bin( Pat_R(:), 8);
+                Pat_G_char = dec2bin( Pat_G(:), 8);
+                Pat_B_char = dec2bin( Pat_B(:), 8); 
+                
+                IMGA_R  = [ IMGA_R,  Pat_R_char(:,1:N_bit_per_pattern) ];
+                IMGA_G  = [ IMGA_G,  Pat_G_char(:,1:N_bit_per_pattern) ];
+                IMGA_B  = [ IMGA_B,  Pat_B_char(:,1:N_bit_per_pattern) ];           
+                
+            end
+            
+            IMGA_R_vec= bin2dec(IMGA_R);
+            IMGA_R_mat = vec2mat(IMGA_R_vec,Taille_IMGA(1));
+            IMGA_R_mat1 = rot90(IMGA_R_mat,-1);
+            IMGA_G_vec= bin2dec(IMGA_G);
+            IMGA_G_mat = vec2mat(IMGA_G_vec,Taille_IMGA(1));
+            IMGA_G_mat1 = rot90(IMGA_G_mat,-1);
+            IMGA_B_vec= bin2dec(IMGA_B);
+            IMGA_B_mat = vec2mat(IMGA_B_vec,Taille_IMGA(1));
+            IMGA_B_mat1 = rot90(IMGA_B_mat,-1);
+
+            rgbImage = cat(3, IMGA_R_mat1, IMGA_G_mat1, IMGA_B_mat1);
+            rgbImage = uint8(rgbImage);      
+        
+            
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%    
+        elseif strcmp(Type_Image,'gray')
+
+            
+            IMGA_R = [ ] ;
+            IMGA_G = [ ] ;
+            IMGA_B = [ ] ;
+            
+            % selection of the N_pattern
+            for j = 1:N_pattern_per_frame
+                
+                ii = j+(i-1)*N_pattern_per_frame ;
+                nomImage = imagefiles(ii).name;
+
+                Im = imread([folder_name_2,'/',nomImage]); % read the next image
+
+                Pat_R = Im(:,:) ;
+        
+                % transformation in decimal
+                Pat_char = dec2bin( Pat_R(:), 8);
+              
+                if j <= 24/(3*N_bit_per_pattern)
+                    IMGA_B  = [ IMGA_B,  Pat_char(:,1:N_bit_per_pattern) ]; 
+                    
+                elseif  j <= 2*24/(3*N_bit_per_pattern)
+                    IMGA_R  = [ IMGA_R,  Pat_char(:,1:N_bit_per_pattern) ];
+                    
+                else
+                    IMGA_G  = [ IMGA_G,  Pat_char(:,1:N_bit_per_pattern) ];
+                    
+                end
+                         
+                
+            end
+            
+            IMGA_R_vec= bin2dec(IMGA_R);
+            IMGA_R_mat = vec2mat(IMGA_R_vec,Taille_IMGA(1));
+            IMGA_R_mat1 = rot90(IMGA_R_mat,-1);
+            IMGA_G_vec= bin2dec(IMGA_G);
+            IMGA_G_mat = vec2mat(IMGA_G_vec,Taille_IMGA(1));
+            IMGA_G_mat1 = rot90(IMGA_G_mat,-1);
+            IMGA_B_vec= bin2dec(IMGA_B);
+            IMGA_B_mat = vec2mat(IMGA_B_vec,Taille_IMGA(1));
+            IMGA_B_mat1 = rot90(IMGA_B_mat,-1);
+
+            rgbImage = cat(3, IMGA_R_mat1, IMGA_G_mat1, IMGA_B_mat1);
+            rgbImage = uint8(rgbImage);      
+                    
+            
+            
+            
+        end
+        %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+        % save and color conversion        
+        if i < 1000
+            if i < 100
+                if i < 10
+                    numImage = ['000',int2str(i)];
+                else
+                    numImage = ['00',int2str(i)];
+                end
+            else
+                numImage = ['0',int2str(i)];
+            end
+        else
+            numImage = int2str(i);
+        end       
+        % save
+        if strcmp(Type_Image,'RGB')
+            imwrite(rgbImage,[folder_name,'/', numImage,'Frame.bmp']) 
+            
+        elseif strcmp(Type_Image,'gray') 
+            
+            imwrite(rgbImage,[folder_name,'/', numImage,'Frame.bmp']) 
+        else
+            if testcolor == 0
+                disp('Choose a correct Type_Color input. RGB taken by default')
+                testcolor = 1;
+            end
+            imwrite(rgbImage,[folder_name,'/', numImage,'Frame.bmp']) 
+            
+        end       
+        
+
+
+    end
+    
+
+disp('Done.')
+
+
+fid = fopen([name_folder,'/','user_parameter.txt'],'w');
+fprintf(fid,' \n Type image : %s ', Type_Image);
+fprintf(fid,' \n Resolution image : [%d  %d] ', Taille_IMGA );
+fprintf(fid,' \n Bit per pattern : %d ',N_bit_per_pattern);
+fprintf(fid,' \n N pattern per frame : %d ', N_pattern_per_frame);
+fprintf(fid,' \n Scroll velocity (pixel/frame) : %d ', Vdef);
+
+fclose(fid);
+    
+
+ 
+ 
+ 
