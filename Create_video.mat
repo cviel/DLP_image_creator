@@ -1,0 +1,39 @@
+
+ close all; 
+
+
+% parameter video
+
+folder_picture = 'Mire_NB_Ve_0.09m_s';
+FrameRate = 60;
+nomvideo = ['testvideo',num2str(FrameRate),'Hz'] ;  % name of the movie
+
+
+%% Creation de la video
+
+disp('Creating video...')
+
+
+imagefiles = dir([folder_picture,'/','*.bmp']);
+Npic = length(dir([folder_picture,'/','*.bmp']));    % Number of files found
+
+
+video = VideoWriter([folder_picture,'/',nomvideo,'.avi'],'Uncompressed AVI'); % ! important to keep the file UNCROMPRESSED ! Else, all the work is lost
+video.FrameRate = FrameRate ;
+open(video); %open the file for writing
+
+
+for k = 1:2
+    for ii=1:Npic %where N is the number of images
+
+      nomImage = imagefiles(ii).name;
+      Im = imread([folder_picture,'/',nomImage]); % read the next image
+      writeVideo(video,Im); %write the image to file
+
+    end
+end
+close(video); %close the file
+
+disp('Done.')
+
+
